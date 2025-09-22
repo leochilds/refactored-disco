@@ -56,6 +56,11 @@ When prompted, enter a positive integer containing at most ten digits. Invalid
 input (empty strings, control characters, non-digit characters, or numbers that
 exceed `u32::MAX`) is rejected with an explanatory error message.
 
+
+## Fuzzing
+
+See [docs/fuzzing.md](docs/fuzzing.md) for instructions on installing `cargo-fuzz` and running the available harnesses.
+
 ## Tests and linting
 
 Execute the full suite of checks with:

@@ -1,6 +1,13 @@
+[workspace]
+members = ["fuzz"]
+resolver = "2"
+
 [package]
 name = "secure_input"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+
+[dev-dependencies]
+cargo-fuzz = "0.13"
