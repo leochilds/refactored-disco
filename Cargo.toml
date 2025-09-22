@@ -1,5 +1,6 @@
 [workspace]
-members = ["fuzz"]
+members = [".", "fuzz"]
+default-members = ["."]
 resolver = "2"
 
 [package]
