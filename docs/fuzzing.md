@@ -2,6 +2,10 @@
 
 This project uses [`cargo-fuzz`](https://github.com/rust-fuzz/cargo-fuzz) to exercise the parsing and sanitisation routines exposed by `secure_input`.
 
+Looking for a complete walkthrough? Follow the [hands-on fuzzing tutorial](tutorial/README.md)
+to recreate the bug that libFuzzer originally uncovered in `read_sanitized_line`,
+inspect the crash artifact, and apply the eventual fix.
+
 ## Prerequisites
 
 1. Install the `cargo-fuzz` subcommand (only required once per development environment):

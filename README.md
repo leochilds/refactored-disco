@@ -55,6 +55,10 @@ cargo run -p secure_input  # builds the demo CLI without the fuzzing toolchain
 Full instructions, including coverage generation and CI expectations, live in
 [docs/fuzzing.md](docs/fuzzing.md).
 
+Prefer a guided exercise? The [hands-on fuzzing tutorial](docs/tutorial/README.md)
+walks through the actual crash that first motivated the hardened
+`read_sanitized_line` implementation.
+
 ## About the `secure_input` crate
 
 The supporting crate exposes a few sanitisation helpers and a command-line demo
