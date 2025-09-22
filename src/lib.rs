@@ -1,5 +1,5 @@
 use std::fmt;
-use std::io::{self, BufRead};
+use std::io::{self, BufRead, Read};
 
 /// Errors that can occur when validating or parsing external input.
 #[derive(Debug)]
@@ -94,10 +94,31 @@ pub fn read_sanitized_line<R: BufRead>(
     max_len: usize,
 ) -> Result<String, InputError> {
     let mut buffer = String::new();
-    let bytes_read = reader.read_line(&mut buffer)?;
+    let (bytes_read, truncated) = {
+        let mut limited = (&mut *reader).take(max_len.saturating_add(1) as u64);
+        let read = limited.read_line(&mut buffer)?;
+        (read, limited.limit() == 0 && !buffer.ends_with('\n'))
+    };
 
     if bytes_read == 0 {
         return Err(InputError::Empty);
+    }
+
+    if truncated {
+        loop {
+            let available = reader.fill_buf()?;
+            if available.is_empty() {
+                break;
+            }
+
+            if let Some(newline_idx) = available.iter().position(|&byte| byte == b'\n') {
+                reader.consume(newline_idx + 1);
+                break;
+            }
+
+            let len = available.len();
+            reader.consume(len);
+        }
     }
 
     sanitize_text(&buffer, max_len)
@@ -141,6 +162,16 @@ mod tests {
         let mut cursor = Cursor::new("six chars\n");
         let err = read_sanitized_line(&mut cursor, 5).unwrap_err();
         assert!(matches!(err, InputError::TooLong { .. }));
+    }
+
+    #[test]
+    fn read_sanitized_line_discards_overlong_line() {
+        let mut cursor = Cursor::new("abcdefg\nok\n");
+        let err = read_sanitized_line(&mut cursor, 5).unwrap_err();
+        assert!(matches!(err, InputError::TooLong { .. }));
+
+        let second = read_sanitized_line(&mut cursor, 5).unwrap();
+        assert_eq!(second, "ok");
     }
 
     #[test]
