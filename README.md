@@ -60,6 +60,8 @@ exceed `u32::MAX`) is rejected with an explanatory error message.
 ## Fuzzing
 
 See [docs/fuzzing.md](docs/fuzzing.md) for instructions on installing `cargo-fuzz` and running the available harnesses.
+For new harness contributions, start with the template in [docs/template_pr.md](docs/template_pr.md).
+The guide walks through creating the target, seeding a corpus, and wiring the CI smoke test that reviewers expect in fuzzing pull requests.
 
 ## Tests and linting
 
