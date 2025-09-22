@@ -93,11 +93,51 @@ pub fn read_sanitized_line<R: BufRead>(
     reader: &mut R,
     max_len: usize,
 ) -> Result<String, InputError> {
-    let mut buffer = String::new();
-    let (bytes_read, truncated) = {
-        let mut limited = (&mut *reader).take(max_len.saturating_add(1) as u64);
-        let read = limited.read_line(&mut buffer)?;
-        (read, limited.limit() == 0 && !buffer.ends_with('\n'))
+    let extra_chars = u64::try_from(max_len).unwrap_or(u64::MAX).saturating_add(1);
+    let byte_limit = extra_chars.saturating_mul(4).saturating_add(1);
+    let (bytes_read, truncated, buffer) = {
+        let mut raw_bytes = Vec::new();
+        let mut limited = (&mut *reader).take(byte_limit);
+        let bytes_read = limited.read_until(b'\n', &mut raw_bytes)?;
+        let limit_exhausted = limited.limit() == 0;
+        let mut truncated = limit_exhausted && !raw_bytes.ends_with(b"\n");
+
+        let buffer = match String::from_utf8(raw_bytes) {
+            Ok(string) => string,
+            Err(err) => {
+                let utf8_error = err.utf8_error();
+                let valid_up_to = utf8_error.valid_up_to();
+
+                if valid_up_to == 0 {
+                    return Err(InputError::Io(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        utf8_error,
+                    )));
+                }
+
+                if utf8_error.error_len().is_some() {
+                    return Err(InputError::Io(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        utf8_error,
+                    )));
+                }
+
+                if limit_exhausted {
+                    truncated = true;
+                    let mut bytes = err.into_bytes();
+                    bytes.truncate(valid_up_to);
+                    // SAFETY: we truncated to the prefix reported as valid UTF-8.
+                    unsafe { String::from_utf8_unchecked(bytes) }
+                } else {
+                    return Err(InputError::Io(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        utf8_error,
+                    )));
+                }
+            }
+        };
+
+        (bytes_read, truncated, buffer)
     };
 
     if bytes_read == 0 {
@@ -168,6 +208,23 @@ mod tests {
     fn read_sanitized_line_discards_overlong_line() {
         let mut cursor = Cursor::new("abcdefg\nok\n");
         let err = read_sanitized_line(&mut cursor, 5).unwrap_err();
+        assert!(matches!(err, InputError::TooLong { .. }));
+
+        let second = read_sanitized_line(&mut cursor, 5).unwrap();
+        assert_eq!(second, "ok");
+    }
+
+    #[test]
+    fn read_sanitized_line_handles_multi_byte_characters() {
+        let mut cursor = Cursor::new("😀👍\n");
+        let result = read_sanitized_line(&mut cursor, 4).unwrap();
+        assert_eq!(result, "😀👍");
+    }
+
+    #[test]
+    fn read_sanitized_line_rejects_long_multi_byte_input() {
+        let mut cursor = Cursor::new("😀😀😀\nok\n");
+        let err = read_sanitized_line(&mut cursor, 2).unwrap_err();
         assert!(matches!(err, InputError::TooLong { .. }));
 
         let second = read_sanitized_line(&mut cursor, 5).unwrap();
