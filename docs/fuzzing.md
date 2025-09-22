@@ -16,9 +16,9 @@ This project uses [`cargo-fuzz`](https://github.com/rust-fuzz/cargo-fuzz) to exe
 
 Three fuzz targets live under `fuzz/fuzz_targets/`:
 
-- `sanitize_text` feeds arbitrary strings and length limits into [`sanitize_text`](../src/lib.rs) to explore edge cases involving trimming and character validation.
-- `read_sanitized_line` constructs buffered readers from arbitrary byte streams to stress the UTF-8 handling and truncation logic in [`read_sanitized_line`](../src/lib.rs).
-- `parse_positive_u32` generates candidate numeric strings for [`parse_positive_u32`](../src/lib.rs), covering digit filtering and overflow detection.
+- `sanitize_text` feeds arbitrary strings and length limits into [`sanitize_text`](../crates/secure_input/src/lib.rs) to explore edge cases involving trimming and character validation.
+- `read_sanitized_line` constructs buffered readers from arbitrary byte streams to stress the UTF-8 handling and truncation logic in [`read_sanitized_line`](../crates/secure_input/src/lib.rs).
+- `parse_positive_u32` generates candidate numeric strings for [`parse_positive_u32`](../crates/secure_input/src/lib.rs), covering digit filtering and overflow detection.
 
 List the targets by running:
 

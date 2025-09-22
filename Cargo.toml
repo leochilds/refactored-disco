@@ -1,14 +1,7 @@
 [workspace]
-members = [".", "fuzz"]
-default-members = ["."]
+members = ["crates/secure_input", "fuzz"]
+default-members = ["crates/secure_input"]
 resolver = "2"
 
-[package]
-name = "secure_input"
-version = "0.1.0"
+[workspace.package]
 edition = "2024"
-
-[dependencies]
-
-[dev-dependencies]
-cargo-fuzz = "0.13"
