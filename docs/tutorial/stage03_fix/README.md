@@ -1,9 +1,9 @@
-# Stage 03: Harden the Reader and Re-Fuzz
+# Stage 03: Harden the Helper and Re-Fuzz
 
-The fix teaches `read_sanitized_line` how to cope with malformed UTF-8 and
-excessively long inputs without panicking. The implementation mirrors the one in
-`main`: it reads a bounded number of bytes, converts via `String::from_utf8`, and
-falls back to truncating or bubbling up an `InputError` instead of unwrapping.
+The fix teaches `sanitize_display_label` how to trim full Unicode whitespace
+before validating the label. The helper now mirrors the behaviour of `str::trim`
+and continues to reject control characters and overlong inputs. New unit tests
+cover non-breaking spaces to prevent regressions.
 
 ## Apply the patch
 
@@ -15,12 +15,13 @@ cp docs/tutorial/stage03_fix/crates/secure_input/src/lib.rs \
    crates/secure_input/src/lib.rs
 ```
 
-At this point `git diff` should show the larger, defensive implementation.
+At this point `git diff` should show the Unicode-aware trimming logic along with
+extra tests for non-breaking spaces.
 
 ## Rebuild confidence with tests
 
 The expanded unit test suite now covers multi-byte characters, truncation, and
-overflow behaviour:
+the once-missing whitespace scenario:
 
 ```bash
 cargo test
@@ -35,22 +36,22 @@ Before launching a fresh fuzzing session, re-run the previously crashing input
 against the fixed code:
 
 ```bash
-cargo fuzz run read_sanitized_line \
-  fuzz/artifacts/read_sanitized_line/panic-utf8
+cargo fuzz run sanitize_display_label \
+  fuzz/artifacts/sanitize_display_label/panic-nbsp
 ```
 
-Instead of panicking, the harness now returns an `Err(InputError::Io(_))` because
-it recognises the invalid UTF-8. libFuzzer treats that as a handled error and
-exits cleanly.
+Instead of panicking, the harness now sees `sanitize_display_label` return
+`Err(InputError::Empty)` because the helper trims the non-breaking spaces.
+libFuzzer treats that as handled input and exits cleanly.
 
 ## Fuzz without crashes
 
 Finally, let libFuzzer loose again to ensure the issue truly disappeared:
 
 ```bash
-cargo fuzz run read_sanitized_line
+cargo fuzz run sanitize_display_label
 ```
 
 The run should stay alive, continuously mutating inputs. You can stop it after a
-few minutes with `Ctrl+C`. Congratulations—you reproduced a real fuzz bug,
-understood the artifact, and shipped a resilient fix!
+few minutes with `Ctrl+C`. Congratulations—you reproduced a fuzz-discovered
+Unicode trimming bug, understood the artifact, and shipped a resilient fix!

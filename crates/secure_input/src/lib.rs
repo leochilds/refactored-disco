@@ -84,6 +84,39 @@ pub fn sanitize_text(raw: &str, max_len: usize) -> Result<String, InputError> {
     Ok(trimmed.to_string())
 }
 
+/// Normalises a free-form display label by trimming surrounding whitespace,
+/// rejecting control characters and enforcing a maximum length.
+///
+/// The helper keeps internal whitespace intact so callers can preserve spacing
+/// semantics (for example, non-breaking spaces between words) while ensuring
+/// that the overall label remains visible and well-formed.
+pub fn sanitize_display_label(raw: &str, max_len: usize) -> Result<String, InputError> {
+    let trimmed = raw.trim();
+
+    if trimmed.is_empty() {
+        return Err(InputError::Empty);
+    }
+
+    let mut cleaned = String::with_capacity(trimmed.len());
+    for ch in trimmed.chars() {
+        if ch.is_control() {
+            return Err(InputError::InvalidCharacter(ch));
+        }
+
+        cleaned.push(ch);
+    }
+
+    let length = cleaned.chars().count();
+    if length > max_len {
+        return Err(InputError::TooLong {
+            max: max_len,
+            actual: length,
+        });
+    }
+
+    Ok(cleaned)
+}
+
 /// Reads a single line from the provided buffered reader and sanitises it.
 ///
 /// The line must not exceed `max_len` characters after trimming whitespace and
@@ -195,6 +228,18 @@ mod tests {
     fn sanitize_text_trims_whitespace() {
         let result = sanitize_text("  Hello World  \r\n", 32).unwrap();
         assert_eq!(result, "Hello World");
+    }
+
+    #[test]
+    fn sanitize_display_label_trims_unicode_boundaries() {
+        let result = sanitize_display_label("\u{2003}Acme\u{00A0}Co.\u{2003}", 64).unwrap();
+        assert_eq!(result, "Acme\u{00A0}Co.");
+    }
+
+    #[test]
+    fn sanitize_display_label_rejects_nbsp_only_input() {
+        let err = sanitize_display_label("\u{00A0}\u{00A0}", 16).unwrap_err();
+        assert!(matches!(err, InputError::Empty));
     }
 
     #[test]
