@@ -26,8 +26,8 @@ The workspace root is package-free; invoke binaries and tests through
 `-p secure_input` or by using the default workspace member. For example:
 
 ```bash
-cargo test          # runs in crates/secure_input by default
-cargo run           # builds the demo CLI from crates/secure_input
+cargo test                 # runs in crates/secure_input by default
+cargo run -p secure_input  # builds the demo CLI without the fuzzing toolchain
 ```
 
 ## Fuzzing first steps
