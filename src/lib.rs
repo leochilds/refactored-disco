@@ -115,6 +115,13 @@ pub fn read_sanitized_line<R: BufRead>(
                     )));
                 }
 
+                if utf8_error.error_len().is_some() {
+                    return Err(InputError::Io(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        utf8_error,
+                    )));
+                }
+
                 if limit_exhausted {
                     truncated = true;
                     let mut bytes = err.into_bytes();
