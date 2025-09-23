@@ -91,7 +91,7 @@ pub fn sanitize_text(raw: &str, max_len: usize) -> Result<String, InputError> {
 /// other Unicode whitespace characters survive the trimming step, so callers can
 /// accidentally accept labels that consist entirely of invisible characters.
 pub fn sanitize_display_label(raw: &str, max_len: usize) -> Result<String, InputError> {
-    let trimmed = raw.trim_matches(|ch| matches!(ch, ' ' | '\\t' | '\\n' | '\\r'));
+    let trimmed = raw.trim_matches(|ch| matches!(ch, ' ' | '\t' | '\n' | '\r'));
 
     if trimmed.is_empty() {
         return Err(InputError::Empty);
