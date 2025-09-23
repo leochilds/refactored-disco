@@ -54,13 +54,20 @@ implementation only trims ASCII whitespace it accepts the label as-is. The
 harness then applies `trim()` and observes that the cleaned label becomes empty,
 causing the panic.
 
-To replay the crash deterministically, point `cargo fuzz run` at the corpus or
-artifact file:
+To replay the crash deterministically and capture a symbolised stack trace, run
+the sanitizer-aware command from the [fuzzing guide](../../fuzzing.md#symbolised-crash-reports-with-addresssanitizer):
 
 ```bash
-cargo fuzz run sanitize_display_label \
+export ASAN_SYMBOLIZER_PATH="$(rustc +nightly --print target-libdir)/../bin/llvm-symbolizer"
+export ASAN_OPTIONS="symbolize=1:abort_on_error=1:detect_leaks=0"
+export RUST_BACKTRACE=1
+
+cargo +nightly fuzz run --sanitizer=address sanitize_display_label \
   fuzz/corpus/sanitize_display_label/nbsp-label
 ```
+
+If your system ships `llvm-symbolizer` in a different location, point
+`ASAN_SYMBOLIZER_PATH` at the appropriate binary instead.
 
 Armed with a reproducer, advance to
 [Stage 03](../stage03_fix/README.md) to harden the helper and confirm that the

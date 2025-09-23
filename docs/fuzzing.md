@@ -61,10 +61,42 @@ artifacts are stored under `fuzz/artifacts/<target-name>/`.
 To resume from the saved corpus on subsequent runs, simply re-run the same
 command; `cargo-fuzz` automatically loads the previously discovered inputs.
 
+## Symbolised crash reports with AddressSanitizer
+
+`cargo-fuzz` can delegate execution to AddressSanitizer (ASan) to capture
+memory-corruption issues and emit symbolised backtraces when a crash occurs.
+The sanitiser integration requires the nightly toolchain, a symbolizer binary,
+and a couple of environment variables:
+
+```bash
+rustup toolchain install nightly                   # once per machine
+rustup +nightly component add llvm-tools-preview   # provides llvm-symbolizer
+
+export ASAN_SYMBOLIZER_PATH="$(rustc +nightly --print target-libdir)/../bin/llvm-symbolizer"
+# If llvm-symbolizer lives elsewhere, point ASAN_SYMBOLIZER_PATH at the binary instead.
+export ASAN_OPTIONS="symbolize=1:abort_on_error=1:detect_leaks=0"
+export RUST_BACKTRACE=1
+
+cargo +nightly fuzz run --sanitizer=address <target-name>
+```
+
+When replaying an artifact or a corpus entry the same invocation applies; just
+append the path to the crashing input:
+
+```bash
+cargo +nightly fuzz run --sanitizer=address <target-name> \
+  fuzz/artifacts/<target-name>/<file>
+```
+
+With the symbolizer path configured, the crash log includes demangled Rust
+frames and the precise source locations within the fuzz harness and the
+instrumented crate.
+
 ## Collecting coverage or reproducing crashes
 
 If a crash is discovered, it will be saved as an individual file in the
-artifacts directory. Reproduce it with:
+artifacts directory. The AddressSanitizer invocation above works for replaying
+an artifact. Without sanitizers you can fall back to the default command:
 
 ```bash
 cargo fuzz run <target-name> fuzz/artifacts/<target-name>/<file>
