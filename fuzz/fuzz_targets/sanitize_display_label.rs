@@ -1,7 +1,7 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use secure_input::{InputError, sanitize_display_label};
+use secure_input::{sanitize_display_label, InputError};
 
 fuzz_target!(|data: &[u8]| {
     if data.is_empty() {

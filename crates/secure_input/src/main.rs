@@ -1,4 +1,4 @@
-use secure_input::{InputError, parse_positive_u32, read_sanitized_line};
+use secure_input::{parse_positive_u32, read_sanitized_line, InputError};
 use std::io::{self, Write};
 
 fn main() {
