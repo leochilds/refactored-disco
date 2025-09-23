@@ -65,8 +65,10 @@ command; `cargo-fuzz` automatically loads the previously discovered inputs.
 
 `cargo-fuzz` can delegate execution to AddressSanitizer (ASan) to capture
 memory-corruption issues and emit symbolised backtraces when a crash occurs.
-The sanitiser integration requires the nightly toolchain, a symbolizer binary,
-and a couple of environment variables:
+The fuzz targets build and run on the stable toolchain. ASan still depends on
+the nightly-only `-Zsanitizer=address` flag though, so remaining on stable means
+invoking `cargo fuzz` with `--sanitizer none`. To enable ASan, install a
+symbolizer binary and configure a couple of environment variables on nightly:
 
 ```bash
 rustup toolchain install nightly                   # once per machine

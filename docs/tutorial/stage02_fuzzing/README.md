@@ -55,7 +55,9 @@ harness then applies `trim()` and observes that the cleaned label becomes empty,
 causing the panic.
 
 To replay the crash deterministically and capture a symbolised stack trace, run
-the sanitizer-aware command from the [fuzzing guide](../../fuzzing.md#symbolised-crash-reports-with-addresssanitizer):
+the sanitizer-aware command from the [fuzzing guide](../../fuzzing.md#symbolised-crash-reports-with-addresssanitizer).
+The fuzz target itself builds on stable; enabling AddressSanitizer still
+requires nightly:
 
 ```bash
 export ASAN_SYMBOLIZER_PATH="$(rustc +nightly --print target-libdir)/../bin/llvm-symbolizer"

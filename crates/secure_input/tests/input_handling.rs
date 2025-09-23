@@ -1,4 +1,4 @@
-use secure_input::{InputError, parse_positive_u32, read_sanitized_line, sanitize_text};
+use secure_input::{parse_positive_u32, read_sanitized_line, sanitize_text, InputError};
 use std::io::Cursor;
 
 #[test]
