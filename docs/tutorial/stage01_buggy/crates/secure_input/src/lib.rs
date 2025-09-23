@@ -1,5 +1,5 @@
 use std::fmt;
-use std::io::{self, BufRead};
+use std::io::{self, BufRead, Read};
 
 /// Errors that can occur when validating or parsing external input.
 #[derive(Debug)]
@@ -84,23 +84,116 @@ pub fn sanitize_text(raw: &str, max_len: usize) -> Result<String, InputError> {
     Ok(trimmed.to_string())
 }
 
+/// Normalises a free-form display label by trimming surrounding whitespace,
+/// rejecting control characters and enforcing a maximum length.
+///
+/// BUG: this early draft only trims ASCII whitespace. Non-breaking spaces and
+/// other Unicode whitespace characters survive the trimming step, so callers can
+/// accidentally accept labels that consist entirely of invisible characters.
+pub fn sanitize_display_label(raw: &str, max_len: usize) -> Result<String, InputError> {
+    let trimmed = raw.trim_matches(|ch| matches!(ch, ' ' | '\\t' | '\\n' | '\\r'));
+
+    if trimmed.is_empty() {
+        return Err(InputError::Empty);
+    }
+
+    let mut cleaned = String::with_capacity(trimmed.len());
+    for ch in trimmed.chars() {
+        if ch.is_control() {
+            return Err(InputError::InvalidCharacter(ch));
+        }
+
+        cleaned.push(ch);
+    }
+
+    let length = cleaned.chars().count();
+    if length > max_len {
+        return Err(InputError::TooLong {
+            max: max_len,
+            actual: length,
+        });
+    }
+
+    Ok(cleaned)
+}
+
 /// Reads a single line from the provided buffered reader and sanitises it.
 ///
-/// This early implementation trusts that the input bytes are valid UTF-8.
-/// A fuzz target later demonstrates that this assumption is unsafe because the
-/// conversion panics when the byte stream contains malformed sequences.
+/// The line must not exceed `max_len` characters after trimming whitespace and
+/// may not contain control characters. End-of-file without any bytes read is
+/// treated as empty input and results in an [`InputError::Empty`] error.
 pub fn read_sanitized_line<R: BufRead>(
     reader: &mut R,
     max_len: usize,
 ) -> Result<String, InputError> {
-    let mut raw_bytes = Vec::new();
-    let bytes_read = reader.read_until(b'\n', &mut raw_bytes)?;
+    let extra_chars = u64::try_from(max_len).unwrap_or(u64::MAX).saturating_add(1);
+    let byte_limit = extra_chars.saturating_mul(4).saturating_add(1);
+    let (bytes_read, truncated, buffer) = {
+        let mut raw_bytes = Vec::new();
+        let mut limited = (&mut *reader).take(byte_limit);
+        let bytes_read = limited.read_until(b'\n', &mut raw_bytes)?;
+        let limit_exhausted = limited.limit() == 0;
+        let mut truncated = limit_exhausted && !raw_bytes.ends_with(b"\n");
+
+        let buffer = match String::from_utf8(raw_bytes) {
+            Ok(string) => string,
+            Err(err) => {
+                let utf8_error = err.utf8_error();
+                let valid_up_to = utf8_error.valid_up_to();
+
+                if valid_up_to == 0 {
+                    return Err(InputError::Io(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        utf8_error,
+                    )));
+                }
+
+                if utf8_error.error_len().is_some() {
+                    return Err(InputError::Io(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        utf8_error,
+                    )));
+                }
+
+                if limit_exhausted {
+                    truncated = true;
+                    let mut bytes = err.into_bytes();
+                    bytes.truncate(valid_up_to);
+                    // SAFETY: we truncated to the prefix reported as valid UTF-8.
+                    unsafe { String::from_utf8_unchecked(bytes) }
+                } else {
+                    return Err(InputError::Io(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        utf8_error,
+                    )));
+                }
+            }
+        };
+
+        (bytes_read, truncated, buffer)
+    };
 
     if bytes_read == 0 {
         return Err(InputError::Empty);
     }
 
-    let buffer = String::from_utf8(raw_bytes).unwrap();
+    if truncated {
+        loop {
+            let available = reader.fill_buf()?;
+            if available.is_empty() {
+                break;
+            }
+
+            if let Some(newline_idx) = available.iter().position(|&byte| byte == b'\n') {
+                reader.consume(newline_idx + 1);
+                break;
+            }
+
+            let len = available.len();
+            reader.consume(len);
+        }
+    }
+
     sanitize_text(&buffer, max_len)
 }
 
@@ -132,15 +225,57 @@ mod tests {
     }
 
     #[test]
-    fn read_sanitized_line_strips_trailing_newline() {
-        let mut cursor = Cursor::new("hello\n".as_bytes());
-        let result = read_sanitized_line(&mut cursor, 16).unwrap();
-        assert_eq!(result, "hello");
+    fn sanitize_text_trims_whitespace() {
+        let result = sanitize_text("  Hello World  \\r\\n", 32).unwrap();
+        assert_eq!(result, "Hello World");
+    }
+
+    #[test]
+    fn read_sanitized_line_rejects_long_input() {
+        let mut cursor = Cursor::new("six chars\\n");
+        let err = read_sanitized_line(&mut cursor, 5).unwrap_err();
+        assert!(matches!(err, InputError::TooLong { .. }));
+    }
+
+    #[test]
+    fn read_sanitized_line_discards_overlong_line() {
+        let mut cursor = Cursor::new("abcdefg\\nok\\n");
+        let err = read_sanitized_line(&mut cursor, 5).unwrap_err();
+        assert!(matches!(err, InputError::TooLong { .. }));
+
+        let second = read_sanitized_line(&mut cursor, 5).unwrap();
+        assert_eq!(second, "ok");
+    }
+
+    #[test]
+    fn read_sanitized_line_handles_multi_byte_characters() {
+        let mut cursor = Cursor::new("😀👍\\n");
+        let result = read_sanitized_line(&mut cursor, 4).unwrap();
+        assert_eq!(result, "😀👍");
+    }
+
+    #[test]
+    fn read_sanitized_line_rejects_long_multi_byte_input() {
+        let mut cursor = Cursor::new("😀😀😀\\nok\\n");
+        let err = read_sanitized_line(&mut cursor, 2).unwrap_err();
+        assert!(matches!(err, InputError::TooLong { .. }));
+
+        let second = read_sanitized_line(&mut cursor, 5).unwrap();
+        assert_eq!(second, "ok");
     }
 
     #[test]
     fn parse_positive_u32_rejects_letters() {
         let err = parse_positive_u32("12ab").unwrap_err();
         assert!(matches!(err, InputError::InvalidCharacter('a')));
+    }
+
+    #[test]
+    fn parse_positive_u32_rejects_overflow() {
+        let err = parse_positive_u32("42949672960").unwrap_err();
+        assert!(matches!(
+            err,
+            InputError::TooLong { .. } | InputError::NumericOverflow
+        ));
     }
 }
