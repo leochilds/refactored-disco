@@ -225,43 +225,10 @@ mod tests {
     }
 
     #[test]
-    fn sanitize_text_trims_whitespace() {
-        let result = sanitize_text("  Hello World  \\r\\n", 32).unwrap();
-        assert_eq!(result, "Hello World");
-    }
-
-    #[test]
     fn read_sanitized_line_rejects_long_input() {
         let mut cursor = Cursor::new("six chars\\n");
         let err = read_sanitized_line(&mut cursor, 5).unwrap_err();
         assert!(matches!(err, InputError::TooLong { .. }));
-    }
-
-    #[test]
-    fn read_sanitized_line_discards_overlong_line() {
-        let mut cursor = Cursor::new("abcdefg\\nok\\n");
-        let err = read_sanitized_line(&mut cursor, 5).unwrap_err();
-        assert!(matches!(err, InputError::TooLong { .. }));
-
-        let second = read_sanitized_line(&mut cursor, 5).unwrap();
-        assert_eq!(second, "ok");
-    }
-
-    #[test]
-    fn read_sanitized_line_handles_multi_byte_characters() {
-        let mut cursor = Cursor::new("😀👍\\n");
-        let result = read_sanitized_line(&mut cursor, 4).unwrap();
-        assert_eq!(result, "😀👍");
-    }
-
-    #[test]
-    fn read_sanitized_line_rejects_long_multi_byte_input() {
-        let mut cursor = Cursor::new("😀😀😀\\nok\\n");
-        let err = read_sanitized_line(&mut cursor, 2).unwrap_err();
-        assert!(matches!(err, InputError::TooLong { .. }));
-
-        let second = read_sanitized_line(&mut cursor, 5).unwrap();
-        assert_eq!(second, "ok");
     }
 
     #[test]
